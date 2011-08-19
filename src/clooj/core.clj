@@ -6,7 +6,7 @@
   (:import (javax.swing AbstractListModel BorderFactory JDialog
                         JFrame JLabel JList JMenuBar JOptionPane
                         JPanel JScrollPane JSplitPane JTextArea
-                        JTextField JTree KeyStroke SpringLayout JTextPane
+                        JTextField JTree KeyStroke SpringLayout JTextPane JEditorPane
                         UIManager)
            (javax.swing.event TreeSelectionListener
                               TreeExpansionListener)
@@ -17,7 +17,8 @@
                            WindowAdapter KeyAdapter)
            (java.awt AWTEvent Color Font GridLayout Toolkit)
            (java.net URL)
-           (java.io File FileReader FileWriter))
+           (java.io File FileReader FileWriter)
+           (jsyntaxpane DefaultSyntaxKit))
   (:use [clojure.contrib.duck-streams :only (writer)]
         [clojure.pprint :only (pprint)]
         [clooj.brackets]
@@ -63,7 +64,9 @@
         :else    (Font. "Monospaced" Font/PLAIN 12)))
 
 (defn make-text-area [wrap]
-  (doto (proxy [JTextPane] []
+  (DefaultSyntaxKit/initKit)
+  ;(doto (proxy [JTextPane] []
+  (doto (proxy [JEditorPane] []
           (getScrollableTracksViewportWidth []
             (if-not wrap
               (if-let [parent (.getParent this)]
@@ -356,7 +359,8 @@
              :split-pane split-pane
              :changed false
              :arglist-label arglist-label}
-        doc-scroll-pane (make-scroll-pane doc-text-area)]
+        doc-scroll-pane (make-scroll-pane doc-text-area)
+        _ (.setContentType doc-text-area "text/clojure")]
     (doto f
       (.setBounds 25 50 950 700)
       (.setLayout layout)
