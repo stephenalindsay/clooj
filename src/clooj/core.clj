@@ -63,9 +63,9 @@
         (is-win) (Font. "Courier New" Font/PLAIN 12)
         :else    (Font. "Monospaced" Font/PLAIN 12)))
 
+(DefaultSyntaxKit/initKit)
+
 (defn make-text-area [wrap]
-  (DefaultSyntaxKit/initKit)
-  ;(doto (proxy [JTextPane] []
   (doto (proxy [JEditorPane] []
           (getScrollableTracksViewportWidth []
             (if-not wrap
@@ -359,8 +359,10 @@
              :split-pane split-pane
              :changed false
              :arglist-label arglist-label}
-        doc-scroll-pane (make-scroll-pane doc-text-area)
-        _ (.setContentType doc-text-area "text/clojure")]
+        doc-scroll-pane (make-scroll-pane doc-text-area)]
+    (.setContentType doc-text-area "text/clojure")
+    (.setContentType repl-out-text-area "text/clojure")
+    (.setContentType repl-in-text-area "text/clojure")
     (doto f
       (.setBounds 25 50 950 700)
       (.setLayout layout)
