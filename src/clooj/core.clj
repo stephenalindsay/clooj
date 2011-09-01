@@ -53,7 +53,8 @@
                             constrain-to-parent make-split-pane
                             gen-map on-click)]
         [clooj.indent :only (setup-autoindent fix-indent-selected-lines)]
-        [clooj.style :only (get-monospaced-fonts show-font-window)])
+        [clooj.style :only (get-monospaced-fonts show-font-window)]
+        [clooj.nrepl :only (connect-to-nrepl)])
   (:require [clojure.main :only (repl repl-prompt)])
   (:gen-class
    :methods [^{:static true} [show [] void]]))
@@ -623,7 +624,10 @@
       ["Apply file ns" "A" "cmd1 shift A" #(apply-namespace-to-repl app)]
       ["Clear output" "C" "cmd1 K" #(.setText (app :repl-out-text-area) "")]
       ["Restart" "R" "cmd1 R" #(restart-repl app
-                            (first (get-selected-projects app)))])
+                            (first (get-selected-projects app)))]
+      ["Start nREPL" "S" "cmd1 shift R" #(println "start nREPL")]
+      ["Connect to nREPL" "C" "cmd1 shift C" #(connect-to-nrepl app)]
+      ["Disconnect nREPL" "D" "cmd1 shift D" #(println "disconnect from nREPL")])
     (add-menu menu-bar "Search" "S"
       ["Find" "F" "cmd1 F" #(start-find app)]
       ["Find next" "N" "cmd1 G" #(highlight-step app false)]
