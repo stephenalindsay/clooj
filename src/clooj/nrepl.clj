@@ -1,10 +1,13 @@
 (ns clooj.nrepl
-  (:require [clojure.tools.nrepl :as nrepl])
+  (:require [clojure.tools.nrepl :as nrepl]
+            [clooj.project :as project])
   (:import [javax.swing JOptionPane]
            [java.net ConnectException UnknownHostException]))
 
 (def default-nrepl-port 11011)
 (def default-nrepl-host "localhost")
+
+(def swapped-out-repl (atom {}))
 
 (defn- get-host
   [message]
@@ -33,9 +36,22 @@
               "Error: [" (.getMessage ce) "]")))))
                                      
 (defn get-nrepl-conx
-  [app]  
+  []  
   (let [host (get-host "Connect to nREPL on which host?")
         port (when host (get-port "Connect to nREPL on which port?"))]
     (when (and host port)
       (println (format "Connecting with on host/port : %s/%s" host port))
       (conx host port))))
+
+(defn connect-to-nrepl [app] 
+  (if-let [project (first (project/get-selected-projects app))]
+    (println project))
+  )
+
+(defn test [conx]
+  (nrepl/combine-responses 
+    (nrepl/response-seq 
+      (nrepl/send-with conx
+        (ns foo)                       
+        (let [x 1]
+          (println (inc x)))))))
