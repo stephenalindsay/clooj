@@ -169,9 +169,14 @@
   (.addDocumentListener
     (.getDocument text-comp)
     (reify DocumentListener
-      (insertUpdate [this _] (f))
-      (removeUpdate [this _] (f))
-      (changedUpdate [this _] (f)))))
+      (insertUpdate [this evt] (f))
+      (removeUpdate [this evt] (f))
+      (changedUpdate [this evt]))))
+
+(defn remove-text-change-listeners [text-comp]
+  (let [d (.getDocument text-comp)]
+    (doseq [l (.getDocumentListeners d)]
+      (.removeDocumentListener d l))))
 
 (defn add-caret-listener [text-comp f]
   (.addCaretListener text-comp
@@ -185,8 +190,9 @@
         v (.getParent text-area)
         l (.. v getViewSize height)
         h (.. v getViewRect height)]
-    (.setViewPosition v
-                      (Point. 0 (min (- l h) (max 0 (- (.y r) (/ h 2))))))))
+    (when r
+      (.setViewPosition v
+                        (Point. 0 (min (- l h) (max 0 (- (.y r) (/ h 2)))))))))
 
 (defn scroll-to-caret [text-comp]
   (scroll-to-pos text-comp (.getCaretPosition text-comp)))

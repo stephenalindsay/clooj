@@ -152,6 +152,21 @@
                      s))
               "No source found.")))))
 
+(defn create-param-list
+  ([method-or-constructor static]
+    (str " (["
+         (let [type-names (map #(.getSimpleName %)
+                               (.getParameterTypes method-or-constructor))
+               param-names (if static type-names (cons "this" type-names))]
+           (apply str (interpose " " param-names)))
+         "])"))
+  ([method-or-constructor]
+    (create-param-list method-or-constructor true)))
+
+(defn constructor-help [constructor]
+  (str (.. constructor getDeclaringClass getSimpleName) "."
+       (create-param-list constructor)))
+
 (defn method-help [method]
   (let [stat (Modifier/isStatic (.getModifiers method))]
     (str
@@ -159,12 +174,7 @@
         (str (.. method getDeclaringClass getSimpleName)
              "/" (.getName method))
         (str "." (.getName method)))
-      " (["
-      (let [type-names (map #(.getSimpleName %)
-                            (.getParameterTypes method))
-            param-names (if stat type-names (cons "this" type-names))]
-        (apply str (interpose " " param-names)))
-      "])"
+     (create-param-list method stat)
       " --> " (.getName (.getReturnType method)))))
 
 (defn field-help [field]
@@ -181,6 +191,11 @@
   (apply str
          (concat
            [(present-ns-item c) "\n  java class"]
+           ["\n\nCONSTRUCTORS\n"]
+           (interpose "\n"
+                      (sort
+                        (for [constructor (.getConstructors c)]
+                          (constructor-help constructor))))
            ["\n\nMETHODS\n"]
            (interpose "\n"
                       (sort
@@ -243,7 +258,8 @@
       (set-first-component (app :repl-split-pane)
                            (app :help-text-scroll-pane))
       (set-first-component (app :doc-split-pane)
-                           (app :completion-scroll-pane))
+                           (app :completion-panel))
+      (.setText (app :repl-label) "Documentation")
       (.ensureIndexIsVisible help-list
                              (.getSelectedIndex help-list)))))
   
@@ -275,7 +291,8 @@
       (set-first-component (app :repl-split-pane)
                            (app :repl-out-scroll-pane))
       (set-first-component (app :doc-split-pane)
-                           (app :docs-tree-scroll-pane)))
+                           (app :docs-tree-panel))
+      (.setText (app :repl-label) "Clojure REPL output"))
     (swap! help-state assoc :visible false :pos nil)))
   
 (defn help-handle-caret-move [app text-comp]
@@ -305,7 +322,7 @@
     ["shift TAB" #(show-tab-help app text-comp dec)]
     ["ESCAPE" #(hide-tab-help app)])
   (attach-child-action-keys text-comp
-    ["ENTER" #(-> help-state deref :visible) #(update-token app text-comp)]))
+    ["ENTER" #(@help-state :visible) #(update-token app text-comp)]))
 
 (defn find-focused-text-pane [app]
   (let [t1 (app :doc-text-area)

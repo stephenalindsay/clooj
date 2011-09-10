@@ -19,7 +19,7 @@
                            WindowAdapter KeyAdapter)
            (java.awt AWTEvent Color Font GridLayout Toolkit)
            (java.net URL)
-           (java.io File FileReader FileWriter))
+           (java.io File FileReader FileWriter StringReader))
   (:use [clojure.contrib.duck-streams :only (writer)]
         [clojure.pprint :only (pprint)]
         [clooj.brackets]
@@ -52,7 +52,8 @@
                             focus-in-text-component
                             scroll-to-caret when-lets
                             constrain-to-parent make-split-pane
-                            gen-map on-click sha1-str)]
+                            gen-map on-click sha1-str
+                            remove-text-change-listeners)]
         [clooj.indent :only (setup-autoindent fix-indent-selected-lines)]
         [clooj.style :only (get-monospaced-fonts show-font-window)]
         [clooj.nrepl :only (connect-to-nrepl)])
@@ -73,8 +74,7 @@
                 (<= (. this getWidth)
                     (. parent getWidth))
                 false)
-              true)))
-    ))  
+              true)))))
 
 (def get-clooj-version
   (memoize
@@ -260,7 +260,7 @@
                     (when-not (= old-pos pos)
                       (dump-temp-doc app f txt))
                     pos)
-                     (catch Throwable t (.printStackTrace t)))))))
+                     (catch Throwable t (awt-event (.printStackTrace t))))))))
   
 (defn setup-temp-writer [app]
   (let [text-comp (:doc-text-area app)]
@@ -269,6 +269,16 @@
            (update-temp app)))))
 
 (declare restart-doc)
+
+(defn file-suffix [^File f]
+  (when-lets [name (.getName f)
+             last-dot (.lastIndexOf name ".")
+             suffix (.substring name (inc last-dot))]
+    suffix))
+    
+(defn text-file? [f]
+  (not (some #{(file-suffix f)}
+             ["jar" "class" "dll" "jpg" "png" "bmp"])))
 
 (defn setup-tree [app]
   (let [tree (:docs-tree app)
@@ -288,7 +298,9 @@
               (save-tree-selection tree (.getNewLeadSelectionPath e))
               (let [f (.. e getPath getLastPathComponent
                             getUserObject)]
-                (when (.. f getName (endsWith ".clj"))
+                (when (and
+                        (not= f @(app :file))
+                        (text-file? f))
                   (restart-doc app f))))))))))
   
 ;; build gui
@@ -342,6 +354,7 @@
   (when-let [dir (choose-directory (app :f) "Choose a project directory")]
     (let [project-dir (if (= (.getName dir) "src") (.getParentFile dir) dir)]
       (add-project app (.getAbsolutePath project-dir))
+      (update-project-tree (:docs-tree app))
       (when-let [clj-file (-> (File. project-dir "src")
                               .getAbsolutePath
                               (get-code-files ".clj")
@@ -358,14 +371,23 @@
     ["cmd2 PLUS" #(.toFront (:frame app))]
     ["cmd2 EQUALS" #(.toFront (:frame app))]))
   
+(defn on-window-activation [win fun]
+  (.addWindowListener win
+    (proxy [WindowAdapter] []
+      (windowActivated [_]
+        (fun)))))
+
 (defn create-app []
   (let [doc-text-area (make-text-area false)
         doc-text-panel (JPanel.)
+        doc-label (JLabel. "Source Editor")
         repl-out-text-area (make-text-area true)
         repl-out-writer (make-repl-writer repl-out-text-area)
         repl-in-text-area (make-text-area false)
         help-text-area (make-text-area true)
         help-text-scroll-pane (make-scroll-pane help-text-area)
+        completion-panel (JPanel.)
+        completion-label (JLabel. "Name search")
         completion-list (JList.)
         completion-scroll-pane (make-scroll-pane completion-list)
         search-text-area (JTextField.)
@@ -376,27 +398,36 @@
         layout (SpringLayout.)
         docs-tree (JTree.)
         docs-tree-scroll-pane (make-scroll-pane docs-tree)
+        docs-tree-panel (JPanel.)
+        docs-tree-label (JLabel. "Projects")
         doc-split-pane (make-split-pane
-                         docs-tree-scroll-pane
+                         docs-tree-panel
                          doc-text-panel true gap 0)
         repl-out-scroll-pane (make-scroll-pane repl-out-text-area)
         repl-split-pane (make-split-pane
                           repl-out-scroll-pane
                           (make-scroll-pane repl-in-text-area) false gap 0.75)
-        split-pane (make-split-pane doc-split-pane repl-split-pane true gap 0.5)
+        repl-panel (JPanel.)
+        repl-label (JLabel. "Clojure REPL output")
+        repl-input-label (JLabel. "Clojure REPL input \u2191")
+        split-pane (make-split-pane doc-split-pane repl-panel true gap 0.5)
         app (merge {:file (atom nil)
                     :repl (atom (create-clojure-repl repl-out-writer nil))
                     :changed false}
                    (gen-map
                      doc-text-area
+                     doc-label
                      repl-out-text-area
                      repl-in-text-area
+                     repl-label
                      frame
                      help-text-area
                      help-text-scroll-pane
                      repl-out-scroll-pane
                      docs-tree
                      docs-tree-scroll-pane
+                     docs-tree-panel
+                     docs-tree-label
                      search-text-area
                      pos-label
                      repl-out-writer
@@ -406,18 +437,41 @@
                      arglist-label
                      completion-list
                      completion-scroll-pane
+                     completion-panel
                      ))
         doc-scroll-pane (make-scroll-pane doc-text-area)]
     (doto frame
       (.setBounds 25 50 950 700)
       (.setLayout layout)
-      (.add split-pane))
+      (.add split-pane)
+      (.setTitle (str "clooj " (get-clooj-version))))
     (doto doc-text-panel
       (.setLayout (SpringLayout.))
       (.add doc-scroll-pane)
+      (.add doc-label)
       (.add pos-label)
       (.add search-text-area)
       (.add arglist-label))
+    (doto docs-tree-panel
+      (.setLayout (SpringLayout.))
+      (.add docs-tree-label)
+      (.add docs-tree-scroll-pane))
+    (doto repl-panel
+      (.setLayout (SpringLayout.))
+      (.add repl-label)
+      (.add repl-input-label)
+      (.add repl-split-pane))
+    (doto completion-panel
+      (.setLayout (SpringLayout.))
+      (.add completion-label)
+      (.add completion-scroll-pane))
+    (constrain-to-parent completion-label :n 0 :w 0 :n 15 :e 0)
+    (constrain-to-parent completion-scroll-pane :n 16 :w 0 :s 0 :e 0)
+    (constrain-to-parent repl-label :n 0 :w 0 :n 15 :e 0)
+    (constrain-to-parent repl-input-label :s -15 :w 0 :s 0 :e 0)
+    (constrain-to-parent repl-split-pane :n 16 :w 0 :s -16 :e 0)
+    (constrain-to-parent docs-tree-label :n 0 :w 0 :n 15 :e 0)
+    (constrain-to-parent docs-tree-scroll-pane :n 16 :w 0 :s 0 :e 0)
     (setup-completion-list completion-list app)
     (doto pos-label
       (.setFont (Font. "Courier" Font/PLAIN 13)))
@@ -425,7 +479,8 @@
     (double-click-selector repl-in-text-area)
     (.setModel docs-tree (DefaultTreeModel. nil))
     (constrain-to-parent split-pane :n gap :w gap :s (- gap) :e (- gap))
-    (constrain-to-parent doc-scroll-pane :n 0 :w 0 :s -16 :e 0)
+    (constrain-to-parent doc-label :n 0 :w 0 :n 15 :e 0)
+    (constrain-to-parent doc-scroll-pane :n 16 :w 0 :s -16 :e 0)
     (constrain-to-parent pos-label :s -14 :w 0 :s 0 :w 100)
     (constrain-to-parent search-text-area :s -15 :w 80 :s 0 :w 300)
     (constrain-to-parent arglist-label :s -14 :w 80 :s -1 :e -10)
@@ -440,8 +495,6 @@
     (make-undoable repl-in-text-area)
     (setup-autoindent repl-in-text-area)
     (setup-tab-help app doc-text-area)
-    (setup-tab-help app repl-in-text-area)
-    (setup-tree app)
     (attach-action-keys doc-text-area
       ["cmd1 shift O" #(open-project app)])
     (dorun (map #(attach-global-action-keys % app)
@@ -450,7 +503,7 @@
 
 ;; clooj docs
 
-(defn restart-doc [app ^File file] 
+(defn restart-doc [app ^File file]
   (send-off temp-file-manager
             (let [f @(:file app)
                   txt (.getText (:doc-text-area app))]
@@ -458,33 +511,32 @@
                 (fn [_] (when (and f temp-file (.exists temp-file))
                           (dump-temp-doc app f txt))
                   0))))
+  (await temp-file-manager)
   (let [frame (app :frame)
         text-area (app :doc-text-area)
         temp-file (get-temp-file file)
         file-to-open (if (and temp-file (.exists temp-file)) temp-file file)
-        clooj-name (str "clooj " (get-clooj-version))]
+        doc-label (app :doc-label)]
+    (remove-text-change-listeners text-area)
     (save-caret-position app)
     (.. text-area getHighlighter removeAllHighlights)
     (if (and file-to-open (.exists file-to-open) (.isFile file-to-open))
-      (do (with-open [rdr (FileReader. file-to-open)]
-                     (.read text-area rdr nil))
-          (.setTitle frame (str clooj-name " \u2014  " (.getPath file)))
+      (do (let [txt (slurp file-to-open)
+                rdr (StringReader. txt)]
+            (.read text-area rdr nil))
+          (.setText doc-label (str "Source Editor \u2014 " (.getPath file)))
           (.setEditable text-area true))
       (do (.setText text-area no-project-txt)
-          (.setTitle frame (str clooj-name " \u2014 (No file selected)"))
+          (.setText doc-label (str "Source Editor (No file selected)"))
           (.setEditable text-area false)))
     (update-caret-position text-area)
     (make-undoable text-area)
     (setup-autoindent text-area)
     (reset! (app :file) file)
-    (setup-temp-writer app)
     (switch-repl app (first (get-selected-projects app)))
-    (apply-namespace-to-repl app))
+    (apply-namespace-to-repl app)
     (load-caret-position app)
-  app)
-
-(defn new-file [app]
-  (restart-doc app nil))
+    (setup-temp-writer app)))
 
 (defn save-file [app]
   (try
@@ -545,6 +597,7 @@
           (.mkdirs (File. dir "src"))
           (new-project-clj app dir)
           (add-project app path)
+          (update-project-tree (:docs-tree app))
           (set-tree-selection (app :docs-tree) path)
           (create-file app dir (str (.getName dir) ".core")))))
       (catch Exception e (do (JOptionPane/showMessageDialog nil
@@ -673,22 +726,20 @@
     (reset! current-app app)
     (make-menus app)
     (add-visibility-shortcut app)
-    (let [ta-in (app :repl-in-text-area)
-          ta-out (app :repl-out-text-area)]
-      (add-repl-input-handler app))
+    (add-repl-input-handler app)
+    (setup-tab-help app (app :repl-in-text-area))
     (doall (map #(add-project app %) (load-project-set)))
-    (persist-window-shape clooj-prefs "main-window" (app :frame)) 
-    (.setVisible (app :frame) true)
+    (let [frame (app :frame)]
+      (persist-window-shape clooj-prefs "main-window" frame) 
+      (.setVisible frame true)
+      (on-window-activation frame #(update-project-tree (app :docs-tree))))
     (setup-temp-writer app)
+    (setup-tree app)
     (let [tree (app :docs-tree)]
       (load-expanded-paths tree)
       (load-tree-selection tree))
     (redirect-stdout-and-stderr (app :repl-out-writer))
-    (load-font app)
-    (awt-event
-      (let [path (get-selected-file-path app)
-            file (when path (File. path))]
-        (restart-doc app file)))))
+    (load-font app)))
 
 (defn -show []
   (reset! embedded true)
