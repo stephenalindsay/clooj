@@ -23,9 +23,9 @@
 
 (def repls (atom {}))
 
-(def *printStackTrace-on-error* false)
+(def ^:dynamic *printStackTrace-on-error* false)
 
-(def *line-offset*)
+(def ^:dynamic *line-offset*)
 
 (defrecord nREPLConx [conx host port])
 
@@ -143,6 +143,7 @@
   (let [rdr (-> cmd StringReader. PushbackReader.)]
     (try (while (read rdr nil nil))
          true
+         (catch IllegalArgumentException e true) ;explicitly show duplicate keys etc.
          (catch Exception e false))))
 
 (defn send-to-nrepl [nrepl-conx cmd]
@@ -214,7 +215,7 @@
   ([buffer char-array offset length]
     (.append buffer char-array offset length)
     buffer)
-  ([buffer ^int t]
+  ([buffer t]
     (when (= Integer (type t))
       (.append buffer (char t)))
     buffer))
@@ -235,7 +236,7 @@
         (write
           ([char-array offset length]
             (send-off buf repl-writer-write char-array offset length))
-          ([^int t]          
+          ([t]          
             (send-off buf repl-writer-write t)))
         (flush [] (send-off buf repl-writer-flush ta-out))
         (close [] nil)))
@@ -305,7 +306,7 @@
         get-caret-pos #(.getCaretPosition ta-in)
         ready #(let [caret-pos (get-caret-pos)
                      txt (.getText ta-in)
-                     trim-txt (string/rtrim txt)]
+                     trim-txt (string/trimr txt)]
                  (and
                    (pos? (.length trim-txt))
                    (<= (.length trim-txt)

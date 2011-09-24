@@ -16,7 +16,7 @@
         [clooj.utils :only (attach-action-keys attach-child-action-keys
                             on-click awt-event when-lets)]
         [clojure.repl :only (source-fn)])
-  (:require [clojure.contrib.string :as string]))
+  (:require [clojure.string :as string]))
 
 ; from http://clojure.org/special_forms
 (def special-forms
@@ -74,7 +74,7 @@
     (when (> (.length text) left)
       (.substring text (inc left)))))
 
-(def non-token-chars [\; \~ \@ \( \) \[ \] \{ \} \  \newline \" \'])
+(def non-token-chars [\; \~ \@ \( \) \[ \] \{ \} \  \. \newline \/ \" \'])
 
 (defn local-token-location [text pos]
   (let [n (.length text)

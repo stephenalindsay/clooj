@@ -19,9 +19,9 @@
                            WindowAdapter KeyAdapter)
            (java.awt AWTEvent Color Font GridLayout Toolkit)
            (java.net URL)
-           (java.io File FileReader FileWriter StringReader))
-  (:use [clojure.contrib.duck-streams :only (writer)]
-        [clojure.pprint :only (pprint)]
+           (java.io File FileReader StringReader
+                    BufferedWriter OutputStreamWriter FileOutputStream))
+  (:use [clojure.pprint :only (pprint)]
         [clooj.brackets]
         [clooj.highlighting]
         [clooj.repl]
@@ -56,7 +56,8 @@
                             remove-text-change-listeners)]
         [clooj.indent :only (setup-autoindent fix-indent-selected-lines)]
         [clooj.style :only (get-monospaced-fonts show-font-window)])
-  (:require [clojure.main :only (repl repl-prompt)])
+  (:require [clojure.main :only (repl repl-prompt)]
+            [clojure.set])
   (:gen-class
    :methods [^{:static true} [show [] void]]))
 
@@ -354,12 +355,12 @@
     (let [project-dir (if (= (.getName dir) "src") (.getParentFile dir) dir)]
       (add-project app (.getAbsolutePath project-dir))
       (update-project-tree (:docs-tree app))
-      (when-let [clj-file (-> (File. project-dir "src")
-                              .getAbsolutePath
-                              (get-code-files ".clj")
-                              first
-                              .getAbsolutePath)]
-        (awt-event (set-tree-selection (app :docs-tree) clj-file))))))
+      (when-let [clj-file (or (-> (File. project-dir "src")
+                                 .getAbsolutePath
+                                 (get-code-files ".clj")
+                                 first)
+                              project-dir)]
+        (awt-event (set-tree-selection (app :docs-tree) (.getAbsolutePath clj-file)))))))
 
 (defn attach-global-action-keys [comp app]
   (attach-action-keys comp
@@ -541,7 +542,10 @@
   (try
     (let [f @(app :file)
           ft (File. (str (.getAbsolutePath f) "~"))]
-      (with-open [writer (FileWriter. f)]
+      (with-open [writer (BufferedWriter.
+                           (OutputStreamWriter.
+                             (FileOutputStream. f)
+                             "UTF-8"))]
         (.write (app :doc-text-area) writer))
       (send-off temp-file-manager (fn [_] 0))
       (.delete ft)
@@ -642,7 +646,7 @@
             (.delete temp-file)
             (update-project-tree (:docs-tree app))
             (restart-doc app f))))))
-      
+
 
 
 (defn make-menus [app]
