@@ -55,8 +55,7 @@
                             gen-map on-click sha1-str
                             remove-text-change-listeners)]
         [clooj.indent :only (setup-autoindent fix-indent-selected-lines)]
-        [clooj.style :only (get-monospaced-fonts show-font-window)]
-        [clooj.nrepl :only (connect-to-nrepl)])
+        [clooj.style :only (get-monospaced-fonts show-font-window)])
   (:require [clojure.main :only (repl repl-prompt)])
   (:gen-class
    :methods [^{:static true} [show [] void]]))

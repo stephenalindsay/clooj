@@ -7,7 +7,8 @@
   (:import (java.io File PipedReader PipedWriter PrintWriter Writer
                     StringReader PushbackReader)
            (java.awt Rectangle)
-           (java.net URL URLClassLoader))
+           (java.net URL URLClassLoader UnknownHostException ConnectException)
+           (javax.swing JOptionPane))
   (:use [clooj.utils :only (attach-child-action-keys attach-action-keys
                             awt-event recording-source-reader
                             get-line-of-offset get-line-start-offset
@@ -15,7 +16,8 @@
         [clooj.brackets :only (find-line-group find-enclosing-brackets)]
         [clojure.pprint :only (pprint)]
         [clooj.project :only (get-temp-file)])
-  (:require [clojure.contrib.string :as string]))
+  (:require [clojure.contrib.string :as string]
+            [clojure.tools.nrepl :as nrepl]))
 
 (def repl-history {:items (atom nil) :pos (atom 0)})
 
@@ -24,6 +26,8 @@
 (def *printStackTrace-on-error* false)
 
 (def *line-offset*)
+
+(defrecord nREPLConx [conx host port])
 
 (defn is-eof-ex? [throwable]
   (and (instance? clojure.lang.LispReader$ReaderException throwable)
@@ -141,6 +145,12 @@
          true
          (catch Exception e false))))
 
+(defn send-to-nrepl [nrepl-conx cmd]
+  (let [s (get-in nrepl-conx [:conx :send])]
+    (nrepl/combine-responses
+      (nrepl/response-seq
+        (s cmd)))))
+
 (defn send-to-repl
   ([app cmd] (send-to-repl app cmd "NO_SOURCE_PATH" 1))
   ([app cmd file line]
@@ -148,13 +158,19 @@
       (let [cmd-ln (str \newline (.trim cmd) \newline)
             cmd (.trim cmd-ln)]
         (append-text (app :repl-out-text-area) cmd-ln)
-        (binding [*out* (:input-writer @(app :repl))]
-            (pr 'SILENT-EVAL `(set! *file* ~file)
-                'SILENT-EVAL `(set! *line-offset*
-                                    (+ *line-offset*
-                                       (- ~line (.getLineNumber *in*)))))
-          (println cmd)
-          (flush))
+        (let [repl @(app :repl)]
+          (println "repl : " repl)
+          (if (instance? nREPLConx repl)
+            (do
+              (println "sending to nrepl")
+              (send-to-nrepl repl cmd))
+            (binding [*out* (:input-writer @(app :repl))]
+              (pr 'SILENT-EVAL `(set! *file* ~file)
+                  'SILENT-EVAL `(set! *line-offset*
+                                      (+ *line-offset*
+                                         (- ~line (.getLineNumber *in*)))))
+              (println cmd)
+              (flush))))
         (when (not= cmd (second @(:items repl-history)))
           (swap! (:items repl-history)
                  replace-first cmd)
@@ -313,3 +329,44 @@
     (attach-action-keys ta-in ["cmd1 UP" prev-hist]
                         ["cmd1 DOWN" next-hist]
                         ["cmd1 ENTER" submit])))
+
+(def default-nrepl-port 11011)
+(def default-nrepl-host "localhost")
+
+
+(defn- get-host
+  [message]
+  (JOptionPane/showInputDialog nil message default-nrepl-host))
+
+(defn- get-port
+  [message]
+  (when-let [port (JOptionPane/showInputDialog nil message default-nrepl-port)]
+    (try
+      (Integer/parseInt port)
+      (catch NumberFormatException nfe
+        (JOptionPane/showMessageDialog nil "Invalid port specified, should be numeric")))))
+
+(defn- conx
+  [host port]
+  (try
+    (nrepl/connect host port)
+    (catch UnknownHostException uhe
+      (JOptionPane/showMessageDialog nil (format "Can't connect to %s, please check that it is a valid host." host)))
+    (catch ConnectException ce
+      (JOptionPane/showMessageDialog nil (format "Unable to connect to nREPL. \n\nPlease check that it is running and that you have entered the correct host and port. \n\nError: [%s]" (.getMessage ce) )))))
+
+(defn get-nrepl-conx
+  []
+  (let [host (get-host "Connect to nREPL on which host?")
+              port (when host (get-port "Connect to nREPL on which port?"))]
+    (when (and host port)
+      (println (format "Connecting with on host/port : %s/%s" host port))
+      (nREPLConx. (conx host port) host port))))
+
+(defn connect-to-nrepl [app]
+  (if-let [conx (get-nrepl-conx)]
+    (append-text (app :repl-out-text-area)
+                       (format "\n\n=== Connecting to nREPL %s/%s ===\n" (:host conx) (:port conx)))
+    (swap! repls (:project-path app) conx)))
+
+

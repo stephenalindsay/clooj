@@ -22,3 +22,9 @@ Use cases:
     * in process repl started
 - send code from editor to nrepl
   * code is sent to nREPL
+
+Notes:
+
+- in process repl is referred to in two places:
+   - clooj.repl/repls &
+   - (:repl app)
