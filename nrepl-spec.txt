@@ -28,3 +28,12 @@ Notes:
 - in process repl is referred to in two places:
    - clooj.repl/repls &
    - (:repl app)
+
+TODO:
+
+- make sure switching between in-jvm and nrepl repl is seamless
+- disconnect from nrepl
+- pending requests
+- make sure you don't break existing repl stuff
+- error handling would be nice
+

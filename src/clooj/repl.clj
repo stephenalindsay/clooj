@@ -16,7 +16,7 @@
         [clooj.brackets :only (find-line-group find-enclosing-brackets)]
         [clojure.pprint :only (pprint)]
         [clooj.project :only (get-temp-file)])
-  (:require [clojure.contrib.string :as string]
+  (:require [clojure.string :as string]
             [clojure.tools.nrepl :as nrepl]))
 
 (def repl-history {:items (atom nil) :pos (atom 0)})
@@ -163,11 +163,14 @@
             cmd (.trim cmd-ln)]
         (append-text (app :repl-out-text-area) cmd-ln)
         (let [repl @(app :repl)]
-          (println "repl : " repl)
           (if (instance? nREPLConx repl)
-            (do
-              (println "sending to nrepl")
-              (send-to-nrepl repl cmd))
+            (let [out-ta (app :repl-out-text-area)
+                  {:keys [value out err ns] :as resp} (send-to-nrepl repl cmd)]
+              ;(println resp) 
+              (append-text out-ta (str (when out out)
+                                       (when err err)
+                                       (first value) 
+                                       ns "=>")))
             (binding [*out* (:input-writer @(app :repl))]
               (pr 'SILENT-EVAL `(set! *file* ~file)
                   'SILENT-EVAL `(set! *line-offset*
@@ -364,13 +367,14 @@
   (let [host (get-host "Connect to nREPL on which host?")
               port (when host (get-port "Connect to nREPL on which port?"))]
     (when (and host port)
-      (println (format "Connecting with on host/port : %s/%s" host port))
+      (println (format "Connecting on host/port : %s/%s" host port))
       (nREPLConx. (conx host port) host port))))
 
 (defn connect-to-nrepl [app]
-  (if-let [conx (get-nrepl-conx)]
+  (when-let [conx (get-nrepl-conx)]
     (append-text (app :repl-out-text-area)
                        (format "\n\n=== Connecting to nREPL %s/%s ===\n" (:host conx) (:port conx)))
-    (swap! repls (:project-path app) conx)))
+    (swap! repls assoc (-> app :repl deref :project-path) conx)
+    (reset! (:repl app) conx)))
 
 
