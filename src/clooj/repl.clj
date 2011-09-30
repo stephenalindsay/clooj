@@ -337,9 +337,8 @@
                         ["cmd1 DOWN" next-hist]
                         ["cmd1 ENTER" submit])))
 
-(def default-nrepl-port 11011)
+(def default-nrepl-port 7888)
 (def default-nrepl-host "localhost")
-
 
 (defn- get-host
   [message]
