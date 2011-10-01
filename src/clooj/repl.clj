@@ -367,13 +367,16 @@
               port (when host (get-port "Connect to nREPL on which port?"))]
     (when (and host port)
       (println (format "Connecting on host/port : %s/%s" host port))
-      (nREPLConx. (conx host port) host port))))
+      (when-let [nrepl-conx (conx host port)]
+        (nREPLConx. nrepl-conx host port)))))
 
 (defn connect-to-nrepl [app]
-  (when-let [conx (get-nrepl-conx)]
-    (append-text (app :repl-out-text-area)
-                       (format "\n\n=== Connecting to nREPL %s/%s ===\n" (:host conx) (:port conx)))
-    (swap! repls assoc (-> app :repl deref :project-path) conx)
-    (reset! (:repl app) conx)))
+  (if-let [conx (get-nrepl-conx)]
+    (do
+      (append-text (app :repl-out-text-area)
+                         (format "\n\n=== Connecting to nREPL %s/%s ===\n" (:host conx) (:port conx)))
+      (swap! repls assoc (-> app :repl deref :project-path) conx)
+      (reset! (:repl app) conx))
+    (append-text (app :repl-out-text-area) "Unable to connect, please check that nREPL is running.")))
 
 
