@@ -55,6 +55,13 @@
                  (filter #(.endsWith (.getName %) ".jar")
                          (mapcat #(.listFiles %) (file-seq project-dir)))))))))
 
+(defn selfish-class-loader [url-array parent]
+  (proxy [URLClassLoader] [url-array nil]
+    (findClass [classname]
+      (try (proxy-super findClass classname)
+           (catch ClassNotFoundException e
+                  (.findClass parent classname))))))
+
 (defn create-class-loader [project-path]
   (when project-path
     (let [files (setup-classpath project-path)
@@ -191,7 +198,8 @@
 (defn relative-file [app]
   (let [prefix (str (-> app :repl deref :project-path) File/separator
                     "src"  File/separator)]
-    (subs (.getAbsolutePath @(app :file)) (count prefix))))
+    (when-let [path (.getAbsolutePath @(app :file))]
+      (subs path (count prefix)))))
 
 (defn selected-region [ta]
   (if-let [text (.getSelectedText ta)]
