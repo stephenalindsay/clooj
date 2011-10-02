@@ -12,7 +12,7 @@
   (:use [clooj.utils :only (attach-child-action-keys attach-action-keys
                             awt-event recording-source-reader
                             get-line-of-offset get-line-start-offset
-                            append-text when-lets)]
+                            append-text when-lets menu-item-lookup)]
         [clooj.brackets :only (find-line-group find-enclosing-brackets)]
         [clojure.pprint :only (pprint)]
         [clooj.project :only (get-temp-file)])
@@ -169,22 +169,21 @@
       (let [cmd-ln (str \newline (.trim cmd) \newline)
             cmd (.trim cmd-ln)]
         (append-text (app :repl-out-text-area) cmd-ln)
-        (let [repl @(app :repl)]
-          (if (instance? nREPLConx repl)
-            (let [out-ta (app :repl-out-text-area)
-                  {:keys [value out err ns] :as resp} (send-to-nrepl repl cmd)]
-              ;(println resp) 
-              (append-text out-ta (str (when out out)
-                                       (when err err)
-                                       (first value) 
-                                       ns "=>")))
-            (binding [*out* (:input-writer @(app :repl))]
-              (pr 'SILENT-EVAL `(set! *file* ~file)
-                  'SILENT-EVAL `(set! *line-offset*
-                                      (+ *line-offset*
-                                         (- ~line (.getLineNumber *in*)))))
-              (println cmd)
-              (flush))))
+        (if-let [nrepl (:nrepl @(app :repl))]
+          (let [out-ta (app :repl-out-text-area)
+                {:keys [host port]} nrepl
+                {:keys [value out err ns] :as resp} (send-to-nrepl nrepl cmd)]
+            (append-text out-ta (str (when out out)
+                                     (when err err)
+                                     (first value) 
+                                     "nREPL " host "/" port ": " ns "=>")))
+          (binding [*out* (:input-writer @(app :repl))]
+            (pr 'SILENT-EVAL `(set! *file* ~file)
+                'SILENT-EVAL `(set! *line-offset*
+                                    (+ *line-offset*
+                                       (- ~line (.getLineNumber *in*)))))
+            (println cmd)
+            (flush)))
         (when (not= cmd (second @(:items repl-history)))
           (swap! (:items repl-history)
                  replace-first cmd)
@@ -376,15 +375,26 @@
     (when (and host port)
       (println (format "Connecting on host/port : %s/%s" host port))
       (when-let [nrepl-conx (conx host port)]
+        (println "Connected")
         (nREPLConx. nrepl-conx host port)))))
+
+(defn disconnect-from-nrepl
+  [app]
+  (swap! (:repl app) dissoc :nrepl)
+  (.setEnabled (:disconnect-nrepl @menu-item-lookup) false)
+  (.setEnabled (:connect-nrepl @menu-item-lookup) true)
+  (append-text (app :repl-out-text-area) "\n\nDisconnected from nrepl, resuming previous repl session\n")
+  (apply-namespace-to-repl app))
 
 (defn connect-to-nrepl [app]
   (if-let [conx (get-nrepl-conx)]
     (do
       (append-text (app :repl-out-text-area)
                          (format "\n\n=== Connecting to nREPL %s/%s ===\n" (:host conx) (:port conx)))
-      (swap! repls assoc (-> app :repl deref :project-path) conx)
-      (reset! (:repl app) conx))
+      (swap! (:repl app) assoc :nrepl conx)
+      (.setEnabled (:disconnect-nrepl @menu-item-lookup) true)
+      (.setEnabled (:connect-nrepl @menu-item-lookup) false)
+      (apply-namespace-to-repl app))
     (append-text (app :repl-out-text-area) "Unable to connect, please check that nREPL is running.")))
 
 

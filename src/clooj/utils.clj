@@ -18,6 +18,8 @@
            (javax.swing.event CaretListener DocumentListener UndoableEditListener)
            (javax.swing.undo UndoManager)))
 
+(def menu-item-lookup (atom {}))
+
 ;; general
 
 (defmacro do-when [f & args]
@@ -304,10 +306,14 @@
 ;; menus
 
 (defn add-menu-item
-  ([menu item-name key-mnemonic key-accelerator response-fn]
-    (let [menu-item (JMenuItem. item-name)]  
+  ([menu item-name key-mnemonic key-accelerator response-fn & options]
+    (let [menu-item (JMenuItem. item-name)
+          {:keys [enabled lookup]} (merge {:enabled true} (first options))]  
       (when key-accelerator
         (.setAccelerator menu-item (get-keystroke key-accelerator)))
+      (.setEnabled menu-item enabled)
+      (when lookup
+        (swap! menu-item-lookup assoc lookup menu-item))
       (when (and (not (is-mac)) key-mnemonic)
         (.setMnemonic menu-item (.getKeyCode (get-keystroke key-mnemonic))))
       (.addActionListener menu-item

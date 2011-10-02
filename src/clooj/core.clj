@@ -646,8 +646,6 @@
             (update-project-tree (:docs-tree app))
             (restart-doc app f))))))
 
-
-
 (defn make-menus [app]
   (when (is-mac)
     (System/setProperty "apple.laf.useScreenMenuBar" "true"))
@@ -681,9 +679,9 @@
       ["Clear output" "C" "cmd1 K" #(.setText (app :repl-out-text-area) "")]
       ["Restart" "R" "cmd1 R" #(restart-repl app
                             (first (get-selected-projects app)))]
-      ["Start nREPL" "S" "cmd1 shift R" #(println "start nREPL")]
-      ["Connect to nREPL" "C" "cmd1 shift C" #(connect-to-nrepl app)]
-      ["Disconnect nREPL" "D" "cmd1 shift D" #(println "disconnect from nREPL")])
+      [:sep]
+      ["Connect to nREPL" "C" "cmd1 shift C" #(connect-to-nrepl app) {:lookup :connect-nrepl}]
+      ["Disconnect nREPL" "D" "cmd1 shift D" #(disconnect-from-nrepl app) {:enabled false :lookup :disconnect-nrepl}])
     (add-menu menu-bar "Search" "S"
       ["Find" "F" "cmd1 F" #(start-find app)]
       ["Find next" "N" "cmd1 G" #(highlight-step app false)]
