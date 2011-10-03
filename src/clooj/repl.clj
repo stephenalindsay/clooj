@@ -332,14 +332,22 @@
   (reset! (:repl app) (create-clojure-repl (app :repl-out-writer) project-path))
   (apply-namespace-to-repl app))
 
+(defn enable-nrepl-menu!
+  [enable]
+  (.setEnabled (:connect-nrepl @menu-item-lookup) enable)
+  (.setEnabled (:disconnect-nrepl @menu-item-lookup) (not enable)))
+
 (defn switch-repl [app project-path]
   (when (and project-path
              (not= project-path (-> app :repl deref :project-path)))
     (append-text (app :repl-out-text-area)
-                 (str "\n\n=== Switching to " project-path " REPL ===\n"))
+                 (str "\n\n=== Switching to " project-path " REPL ===\n"))    
     (let [repl (or (get @repls project-path)
                    (create-clojure-repl (app :repl-out-writer) project-path))]
-      (reset! (:repl app) repl))))
+      (reset! (:repl app) repl)
+      (if (:nrepl @(:repl app))
+        (enable-nrepl-menu! false)
+        (enable-nrepl-menu! true)))))
 
 (defn add-repl-input-handler [app]
   (let [ta-in (app :repl-in-text-area)
@@ -408,8 +416,8 @@
 (defn disconnect-from-nrepl
   [app]
   (swap! (:repl app) dissoc :nrepl)
-  (.setEnabled (:disconnect-nrepl @menu-item-lookup) false)
-  (.setEnabled (:connect-nrepl @menu-item-lookup) true)
+  (swap! repls assoc (-> app :repl deref :project-path) @(:repl app))
+  (enable-nrepl-menu! true)  
   (append-text (app :repl-out-text-area) "\n\nDisconnected from nrepl, resuming previous repl session\n")
   (apply-namespace-to-repl app))
 
@@ -419,8 +427,8 @@
       (append-text (app :repl-out-text-area)
                          (format "\n\n=== Connecting to nREPL %s/%s ===\n" (:host conx) (:port conx)))
       (swap! (:repl app) assoc :nrepl conx)
-      (.setEnabled (:disconnect-nrepl @menu-item-lookup) true)
-      (.setEnabled (:connect-nrepl @menu-item-lookup) false)
+      (swap! repls assoc (-> app :repl deref :project-path) @(:repl app))
+      (enable-nrepl-menu! false)
       (apply-namespace-to-repl app))
     (append-text (app :repl-out-text-area) "Unable to connect, please check that nREPL is running.")))
 
