@@ -382,11 +382,11 @@
 (def default-nrepl-port 7888)
 (def default-nrepl-host "localhost")
 
-(defn- get-host
+(defn- get-nrepl-host
   [message]
   (JOptionPane/showInputDialog nil message default-nrepl-host))
 
-(defn- get-port
+(defn- get-nrepl-port
   [message]
   (when-let [port (JOptionPane/showInputDialog nil message default-nrepl-port)]
     (try
@@ -394,7 +394,7 @@
       (catch NumberFormatException nfe
         (JOptionPane/showMessageDialog nil "Invalid port specified, should be numeric")))))
 
-(defn- conx
+(defn- nrepl-connect
   [host port]
   (try
     (nrepl/connect host port)
@@ -405,11 +405,11 @@
 
 (defn get-nrepl-conx
   []
-  (let [host (get-host "Connect to nREPL on which host?")
-              port (when host (get-port "Connect to nREPL on which port?"))]
+  (let [host (get-nrepl-host "Connect to nREPL on which host?")
+              port (when host (get-nrepl-port "Connect to nREPL on which port?"))]
     (when (and host port)
       (println (format "Connecting on host/port : %s/%s" host port))
-      (when-let [nrepl-conx (conx host port)]
+      (when-let [nrepl-conx (nrepl-connect host port)]
         (println "Connected")
         (nREPLConx. nrepl-conx host port)))))
 
